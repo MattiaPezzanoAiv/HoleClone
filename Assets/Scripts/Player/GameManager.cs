@@ -28,6 +28,7 @@ public class GameManager : MonoBehaviour
         public Color color;
     }
 
+    #region FIELDS
     [SerializeField]
     private Transform[] spawnPoints;
     [SerializeField]
@@ -45,6 +46,8 @@ public class GameManager : MonoBehaviour
     private Player playerPrefab, opponentsPrefab;
     [SerializeField]
     private TextBehaviour txtPrefab;
+    #endregion
+
 
     public List<Player> playersRanking { get; private set; }
     public Color[] AvailableColors { get { return availableColors; } }
@@ -54,11 +57,14 @@ public class GameManager : MonoBehaviour
     private Camera gameCamera;
     private bool isGameStarted = false;
 
+    #region EVENTS
     //events
     public System.Action<int> onScoreUpdate;    //new score
     public System.Action<float> onTimerUpdate;  //current time
     public System.Action<int> onMatchEnded; //passed final score
+    #endregion
 
+    #region UNITY_CALLBACKS
     private void Awake()
     {
         Instance = this;
@@ -85,7 +91,44 @@ public class GameManager : MonoBehaviour
 
         this.objectDestruction.onBuildingEaten += OnBuildingEaten;
     }
+    // Start is called before the first frame update
+    private void Start()
+    {
+        gameCamera = Camera.main;
+    }
+    private void Update()
+    {
+        if (isGameStarted)
+            if (onTimerUpdate != null)
+                onTimerUpdate.Invoke(matchDurationSeconds - (Time.time - startMatchTime));
+    }
+    #endregion
 
+    #region INTERNAL
+    void OnBuildingEaten(Building b)
+    {
+        //scale objs (remove from layer class but access b.owner)
+        if (b.Owner == null)
+            return;
+
+        b.Owner.OnBuildingEaten(b);
+
+        //add pts 
+        int newPts = players[b.Owner].pts += b.GetPts() * 2;
+        b.Owner.RefreshLevel(players[b.Owner].pts);
+
+        if (b.Owner == GetUser())
+            this.onScoreUpdate.Invoke(newPts);
+
+        Vector3 dirToCamera = (gameCamera.transform.position - b.Owner.transform.position).normalized;
+        var txt = Instantiate(txtPrefab, b.Owner.transform.position + dirToCamera * 2f, Quaternion.identity);
+        txt.Setup(this.gameCamera, players[b.Owner].color, (b.GetPts() * 2).ToString());
+        Destroy(txt.gameObject, 0.7f);
+
+        //do something
+        //make new event for reorder list
+        //make new event for your points
+    }
     IEnumerator MatchCoroutine()
     {
         this.startMatchTime = Time.time;
@@ -101,7 +144,9 @@ public class GameManager : MonoBehaviour
             player.Key.SetMovementEnabled(active);
         }
     }
+    #endregion
 
+    #region API
     public void StartGame()
     {
         StartCoroutine(MatchCoroutine());
@@ -133,25 +178,9 @@ public class GameManager : MonoBehaviour
         UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
     }
 
-    // Start is called before the first frame update
-    void Start()
-    {
-        gameCamera = Camera.main;
-    }
-    private void Update()
-    {
-        if (isGameStarted)
-            if (onTimerUpdate != null)
-                onTimerUpdate.Invoke(matchDurationSeconds - (Time.time - startMatchTime));
-    }
-
     public PlayerSize GetUserSize()
     {
         return userPlayer.GetSize();
-    }
-    public int GetUserScore()
-    {
-        return players[userPlayer].pts;
     }
     public Player GetUser()
     {
@@ -161,32 +190,10 @@ public class GameManager : MonoBehaviour
     {
         return (from p in players where p.Key != exclude && p.Key != userPlayer select p.Key).ToList();
     }
-    public Color GetPlayerColor(Player p)
-    {
-        return players[p].color;
-    }
+    #endregion
 
-    public void OnBuildingEaten(Building b)
-    {
-        //scale objs (remove from layer class but access b.owner)
-        if (b.Owner != null)
-            b.Owner.OnBuildingEaten(b);
-
-        //add pts 
-        int newPts = players[b.Owner].pts += b.GetPts() * 2;
-        b.Owner.RefreshLevel(players[b.Owner].pts);
-
-        if (b.Owner == GetUser())
-            this.onScoreUpdate.Invoke(newPts);
-
-        Vector3 dirToCamera = (gameCamera.transform.position - b.Owner.transform.position).normalized;
-        var txt = Instantiate(txtPrefab, b.Owner.transform.position + dirToCamera * 2f, Quaternion.identity);
-        txt.Setup(this.gameCamera, players[b.Owner].color, (b.GetPts() * 2).ToString());
-        Destroy(txt.gameObject, 0.7f);
-
-        //do something
-        //make new event for reorder list
-        //make new event for your points
-    }
-
+    //public Color GetPlayerColor(Player p)
+    //{
+    //    return players[p].color;
+    //}
 }
